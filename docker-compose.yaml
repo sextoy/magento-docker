@@ -1,0 +1,120 @@
+version: '3'
+
+services:
+
+  es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.6.2
+    container_name: es01
+    environment:
+      - node.name=es01
+      - cluster.name=es-docker-cluster
+      - discovery.seed_hosts=es02,es03
+      - cluster.initial_master_nodes=es01,es02,es03
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - ./persist/es01:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+    networks:
+      - elastic
+
+  es02:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.6.2
+    container_name: es02
+    environment:
+      - node.name=es02
+      - cluster.name=es-docker-cluster
+      - discovery.seed_hosts=es01,es03
+      - cluster.initial_master_nodes=es01,es02,es03
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - ./persist/es02:/usr/share/elasticsearch/data
+    ports:
+      - 9201:9201
+    networks:
+      - elastic
+
+  es03:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.6.2
+    container_name: es03
+    environment:
+      - node.name=es03
+      - cluster.name=es-docker-cluster
+      - discovery.seed_hosts=es01,es02
+      - cluster.initial_master_nodes=es01,es02,es03
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - ./persist/es03:/usr/share/elasticsearch/data
+    ports:
+      - 9202:9202
+    networks:
+      - elastic
+
+
+  mariadb:
+    image: mariadb:10.2
+    container_name: mariadb
+    restart: always
+    volumes:
+      - ./persist/mysql:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=bS3vF3TQLXphcGxk
+      - MYSQL_DATABASE=magento
+    networks:
+      - backend
+
+  frontend:
+    # build has been left out on purpose. The steps to build a container
+    # are not covered in the Dockerfile, they have been left out on purpose
+    # so all preparation is done in an intermediate environment that has
+    # all requirements. See .gitlab-ci.yml.
+    # build: .
+    image: dlashua/magento:latest
+    container_name: magento-frontend
+    links:
+      - mariadb:mariadb
+    restart: always
+    volumes:
+      - ./persist/magento/apache:/bitnami/apache
+      - ./persist/magento/data:/bitnami/magento
+    environment:
+      MARIADB_HOST: "mariadb"
+      MARIADB_PORT_NUMBER: "3306"
+      MAGENTO_USERNAME: "admin"
+      MAGENTO_PASSWORD: "magento123"
+      MAGENTO_DATABASE_NAME: "magento"
+      MAGENTO_DATABASE_USER: "root"
+      MAGENTO_DATABASE_PASSWORD: "bS3vF3TQLXphcGxk"
+      MAGENTO_MODE: "developer"
+      MAGENTO_USE_SECURE_ADMIN: "no"
+      MAGENTO_SKIP_REINDEX: "no"
+      ELASTICSEARCH_HOST: es01
+      ELASTICSEARCH_PORT_NUMBER: "9200"
+      MAGENTO_HOST: "localhost"
+      EXTERNAL_HTTP_PORT_NUMBER: "8080"
+    ports:
+      - 8080:80
+    networks:
+      - backend
+      - elastic
+
+networks:
+  backend:
+    driver: bridge
+  elastic:
+    driver: bridge
